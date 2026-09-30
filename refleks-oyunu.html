@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Refleks Oyunu</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --ink: #1c1f24;
+    --muted: #6a717c;
+    --line: #dfe2e7;
+    --cell: #e4e7ec;
+    --cell-hover: #d9dde3;
+    --active: #000000;
+    --accent: #2f5d8a;
+    --accent-ink: #ffffff;
+    --good: #2e7d5b;
+    --bad: #b04a4a;
+    --radius: 14px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181c;
+      --surface: #20242a;
+      --ink: #eceef1;
+      --muted: #9aa1ac;
+      --line: #333942;
+      --cell: #343a43;
+      --cell-hover: #3d444e;
+      --active: #ffffff;
+      --accent: #6b9bcb;
+      --accent-ink: #10151b;
+      --good: #58b48c;
+      --bad: #d47b7b;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+
+  body {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+
+  .screen {
+    display: none;
+    min-height: 100%;
+    height: 100dvh;
+    width: 100%;
+    padding: 20px;
+    align-items: center;
+    justify-content: center;
+  }
+  .screen.is-visible { display: flex; }
+
+  /* ---------- Ortak bileşenler ---------- */
+  .panel {
+    width: 100%;
+    max-width: 520px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); font-weight: 650; letter-spacing: -0.01em; }
+  .lead { color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
+
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  .field label { font-size: 0.95rem; color: var(--muted); }
+  .field input {
+    font: inherit;
+    font-size: 1.25rem;
+    min-height: 60px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-user-select: text;
+    user-select: text;
+    transition: border-color .15s;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+
+  .btn {
+    font: inherit;
+    font-size: 1.25rem;
+    font-weight: 600;
+    min-height: 64px;
+    padding: 0 28px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-ink);
+    transition: transform .08s, opacity .15s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .btn.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+
+  .rules { color: var(--muted); font-size: 0.95rem; line-height: 1.55; border-top: 1px solid var(--line); padding-top: 16px; }
+
+  /* ---------- Geri sayım ---------- */
+  .countdown { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .countdown .label { font-size: clamp(1.2rem, 3vw, 1.6rem); color: var(--muted); }
+  .countdown .number {
+    font-size: clamp(8rem, 30vmin, 16rem);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .countdown .sub { font-size: clamp(1.1rem, 2.6vw, 1.4rem); }
+
+  /* ---------- Oyun ekranı ---------- */
+  #screen-game { flex-direction: column; gap: 16px; }
+
+  .game {
+    width: 100%;
+    max-width: 1100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .side { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+  .side-head { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 1rem; }
+  .side-head .now { color: var(--ink); font-weight: 600; font-size: 1.15rem; }
+
+  .scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .score-card {
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    transition: border-color .2s, opacity .2s;
+    opacity: .65;
+  }
+  .score-card.is-current { border-color: var(--ink); opacity: 1; }
+  .score-card .name { font-size: 1rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .score-card .total { font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .score-card .parts { font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .timer { display: flex; align-items: center; gap: 12px; }
+  .timer-track { flex: 1; height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .timer-fill { height: 100%; width: 100%; background: var(--ink); transform-origin: left center; transform: scaleX(1); }
+  .timer-text { min-width: 3.6em; text-align: right; font-variant-numeric: tabular-nums; font-size: 1.15rem; font-weight: 600; }
+
+  .grid {
+    --size: min(94vw, calc(100dvh - 330px), 640px);
+    width: var(--size);
+    height: var(--size);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: clamp(6px, 1.4vmin, 12px);
+    touch-action: manipulation;
+  }
+
+  .cell {
+    position: relative;
+    border: none;
+    border-radius: clamp(8px, 1.6vmin, 14px);
+    background: var(--cell);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: inherit;
+    font-weight: 700;
+    font-size: clamp(1rem, 3.6vmin, 1.7rem);
+    color: transparent;
+    transition: background-color .06s;
+  }
+  .cell:active { background: var(--cell-hover); }
+  .cell.active { background: var(--active); }
+  .cell.hit { background: var(--good); color: #fff; }
+  .cell.miss { background: var(--bad); color: #fff; }
+
+  /* Yatay ekran (akıllı tahta, tablet yatay) */
+  @media (orientation: landscape) and (min-width: 900px) {
+    .game { flex-direction: row; align-items: center; justify-content: center; gap: 40px; }
+    .side { width: 340px; flex-shrink: 0; }
+    .scoreboard { grid-template-columns: 1fr; }
+    .grid { --size: min(calc(100dvh - 48px), 62vw, 760px); }
+  }
+
+  /* Kısa yatay telefon ekranı */
+  @media (orientation: landscape) and (max-width: 899px) and (max-height: 520px) {
+    .screen { padding: 10px; }
+    .game { flex-direction: row; gap: 16px; align-items: center; justify-content: center; }
+    .side { width: 42vw; }
+    .scoreboard { grid-template-columns: 1fr; gap: 8px; }
+    .score-card { padding: 8px 12px; }
+    .grid { --size: min(calc(100dvh - 24px), 52vw); }
+  }
+
+  /* ---------- Sonuç ekranı ---------- */
+  .result-title { font-size: 1rem; color: var(--muted); }
+  .winner { font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 12px 6px; text-align: right; border-bottom: 1px solid var(--line); font-size: 1.05rem; }
+  th:first-child, td:first-child { text-align: left; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 0.95rem; }
+  td.total { font-weight: 700; }
+  tr.is-winner td:first-child { font-weight: 700; }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .actions .btn { flex: 1 1 200px; }
+
+  .sound-toggle {
+    font: inherit;
+    font-size: 0.95rem;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 2px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .sound-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Giriş ekranı -->
+<main id="screen-setup" class="screen is-visible">
+  <section class="panel">
+    <div>
+      <h1>Refleks Oyunu</h1>
+      <p class="lead" style="margin-top:8px">İki oyuncu, üç tur. Yanan kutuya en hızlı dokunan kazanır.</p>
+    </div>
+
+    <div class="field">
+      <label for="name-1">Oyuncu 1</label>
+      <input id="name-1" type="text" maxlength="16" value="Oyuncu 1" autocomplete="off" autocapitalize="words">
+    </div>
+    <div class="field">
+      <label for="name-2">Oyuncu 2</label>
+      <input id="name-2" type="text" maxlength="16" value="Oyuncu 2" autocomplete="off" autocapitalize="words">
+    </div>
+
+    <button id="btn-start" class="btn" type="button">Oyunu Başlat</button>
+    <button class="sound-toggle" type="button">Ses: Açık</button>
+
+    <p class="rules">
+      Her oyuncunun turu 10 saniyedir. Siyah yanan kutuya dokunun: her milisaniye 1 puandır, yani 1000 puandan
+      tepki sürenizi (ms) düşerek puan alırsınız. Yanmayan bir kutuya dokunmak 300 puan kaybettirir.
+      Her oyuncu 3 tur oynar.
+    </p>
+  </section>
+</main>
+
+<!-- 2. Geri sayım ekranı -->
+<main id="screen-countdown" class="screen">
+  <div class="countdown" aria-live="polite">
+    <div class="label" id="cd-label"></div>
+    <div class="number" id="cd-number">5</div>
+    <div class="sub" id="cd-sub"></div>
+  </div>
+</main>
+
+<!-- 3. Oyun ekranı -->
+<main id="screen-game" class="screen">
+  <div class="game">
+    <div class="side">
+      <div class="side-head">
+        <span id="round-info">Tur 1 / 3</span>
+        <button class="sound-toggle" type="button">Ses: Açık</button>
+        <span class="now" id="turn-info"></span>
+      </div>
+
+      <div class="scoreboard">
+        <div class="score-card" id="card-0">
+          <span class="name" id="card-name-0"></span>
+          <span class="total" id="card-total-0">0</span>
+          <span class="parts" id="card-parts-0"></span>
+        </div>
+        <div class="score-card" id="card-1">
+          <span class="name" id="card-name-1"></span>
+          <span class="total" id="card-total-1">0</span>
+          <span class="parts" id="card-parts-1"></span>
+        </div>
+      </div>
+
+      <div class="timer">
+        <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+        <div class="timer-text" id="timer-text">10.0</div>
+      </div>
+    </div>
+
+    <div class="grid" id="grid" role="group" aria-label="Oyun alanı"></div>
+  </div>
+</main>
+
+<!-- 4. Sonuç ekranı -->
+<main id="screen-result" class="screen">
+  <section class="panel">
+    <div>
+      <div class="result-title" id="result-title">Kazanan</div>
+      <div class="winner" id="result-winner"></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr id="result-head"></tr>
+        </thead>
+        <tbody id="result-body"></tbody>
+      </table>
+    </div>
+
+    <p class="rules" id="result-note" style="border-top:none;padding-top:0"></p>
+
+    <div class="actions">
+      <button id="btn-again" class="btn" type="button">Tekrar Oyna</button>
+      <button id="btn-menu" class="btn secondary" type="button">Ana Menü</button>
+    </div>
+  </section>
+</main>
+
+<script>
+/* =====================================================================
+   REFLEKS OYUNU
+   Bölümler:
+     1) CONFIG            : oyun ayarları
+     2) ScoreRepository   : veri katmanı (şimdilik yerel; Firebase için hazır)
+     3) Match (state)     : oyuncu adları ve skorlar
+     4) UI yardımcıları
+     5) Oyun motoru       : geri sayım, tur, puanlama
+     6) Olaylar ve başlatma
+   ===================================================================== */
+
+/* ---------- 1) AYARLAR ---------- */
+const CONFIG = Object.freeze({
+  GRID_SIZE: 25,          // 5x5
+  ROUNDS: 3,              // her oyuncu 3 tur oynar (toplam 6 el)
+  TURN_MS: 10000,         // her el 10 saniye
+  ACTIVE_MS: 1000,        // kutu 1 saniye yanık kalır
+  GAP_MS: 2000,           // iki kutu arası 2 saniye bekleme
+  START_COUNTDOWN_S: 5,   // oyun başlangıç geri sayımı
+  HANDOFF_COUNTDOWN_S: 3, // oyuncular arası kısa geri sayım
+  MAX_POINTS: 1000,       // anında tıklama puanı (kutu yandığı an)
+  MIN_POINTS: 0,          // 1 saniye dolarken tıklama puanı
+  // Puan = 1000 - reaksiyon süresi (ms). Yani her 1 milisaniye tam 1 puandır.
+  WRONG_PENALTY: 300,     // yanlış kutu cezası
+  DEFAULT_NAMES: ['Oyuncu 1', 'Oyuncu 2']
+});
+
+/* ---------- 2) VERİ KATMANI ----------
+   Firebase'e geçerken sadece bu nesnenin içini doldurmanız yeterli.
+   Örnek (Firestore, modüler SDK):
+     async saveMatch(match) { await addDoc(collection(db, 'matches'), match); }
+     async getLeaderboard() { ... }
+   Oyunun geri kalanı bu nesne üzerinden konuşur, başka yere dokunmaz. */
+const ScoreRepository = {
+  async saveMatch(match) {
+    // TODO: Firebase bağlantısı burada yapılacak.
+    // match = { playedAt, players: [{ name, scores: [r1, r2], total }], winnerIndex, turns: [...] }
+    console.info('[ScoreRepository] Maç kaydı (henüz veritabanına yazılmıyor):', match);
+    return match;
+  },
+  async getLeaderboard() {
+    // TODO: Firebase'den en yüksek skorları getir.
+    return [];
+  }
+};
+
+/* ---------- 3) MAÇ DURUMU ---------- */
+const Match = {
+  players: [],   // [{ name, scores: [tur1, tur2] }]
+  turns: [],     // her elin detayı (isabet, ıskalama, yanlış tık)
+
+  reset(names) {
+    this.players = names.map(name => ({ name, scores: new Array(CONFIG.ROUNDS).fill(0) }));
+    this.turns = [];
+  },
+  addPoints(playerIndex, roundIndex, points) {
+    this.players[playerIndex].scores[roundIndex] += points;
+  },
+  total(playerIndex) {
+    return this.players[playerIndex].scores.reduce((a, b) => a + b, 0);
+  },
+  // Ortalama reaksiyon süresi (ms). Hiç isabet yoksa Infinity döner.
+  avgReaction(playerIndex) {
+    const all = this.turns
+      .filter(t => t.playerIndex === playerIndex)
+      .flatMap(t => t.reactions);
+    if (!all.length) return Infinity;
+    return all.reduce((a, b) => a + b, 0) / all.length;
+  },
+  // Puanlar eşitse ortalama reaksiyonu daha kısa olan kazanır.
+  winnerIndex() {
+    const a = this.total(0), b = this.total(1);
+    if (a !== b) return a > b ? 0 : 1;
+    const ra = this.avgReaction(0), rb = this.avgReaction(1);
+    if (ra !== rb) return ra < rb ? 0 : 1;
+    return -1; // gerçek beraberlik (pratikte neredeyse imkansız)
+  },
+  wonByTiebreak() {
+    return this.total(0) === this.total(1) && this.winnerIndex() !== -1;
+  },
+  toRecord() {
+    return {
+      playedAt: new Date().toISOString(),
+      players: this.players.map((p, i) => ({ name: p.name, scores: [...p.scores], total: this.total(i) })),
+      winnerIndex: this.winnerIndex(),
+      turns: this.turns.map(t => ({ ...t }))
+    };
+  }
+};
+
+/* ---------- 4) UI YARDIMCILARI ---------- */
+const $ = id => document.getElementById(id);
+
+const screens = {
+  setup: $('screen-setup'),
+  countdown: $('screen-countdown'),
+  game: $('screen-game'),
+  result: $('screen-result')
+};
+
+function showScreen(name) {
+  Object.entries(screens).forEach(([key, el]) => el.classList.toggle('is-visible', key === name));
+}
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function cleanName(value, fallback) {
+  const v = (value || '').replace(/\s+/g, ' ').trim();
+  return v || fallback;
+}
+
+// 25 kutuyu oluştur
+const gridEl = $('grid');
+const cells = [];
+for (let i = 0; i < CONFIG.GRID_SIZE; i++) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'cell';
+  btn.dataset.index = String(i);
+  btn.setAttribute('aria-label', 'Kutu ' + (i + 1));
+  gridEl.appendChild(btn);
+  cells.push(btn);
+}
+
+function renderScoreboard(currentPlayer) {
+  for (let i = 0; i < 2; i++) {
+    $('card-name-' + i).textContent = Match.players[i].name;
+    $('card-total-' + i).textContent = Match.total(i);
+    $('card-parts-' + i).textContent = 'Turlar: ' + Match.players[i].scores.join(' / ');
+    $('card-' + i).classList.toggle('is-current', i === currentPlayer);
+  }
+}
+
+function showFeedback(cell, text, kind) {
+  clearTimeout(cell._fbTimer);
+  cell.textContent = text;
+  cell.classList.remove('hit', 'miss');
+  cell.classList.add(kind);
+  cell._fbTimer = setTimeout(() => {
+    cell.classList.remove('hit', 'miss');
+    cell.textContent = '';
+  }, 450);
+}
+
+function clearAllCells() {
+  cells.forEach(c => {
+    clearTimeout(c._fbTimer);
+    c.classList.remove('active', 'hit', 'miss');
+    c.textContent = '';
+  });
+}
+
+/* ---------- SES EFEKTLERİ ----------
+   Harici ses dosyası yok: sesler tarayıcının Web Audio API'si ile kodla üretilir.
+   Tarayıcılar sesi ilk dokunuştan sonra açar; bu yüzden init() ilk tıklamada çağrılır. */
+const Sound = {
+  ctx: null,
+  enabled: true,
+
+  init() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) this.ctx = new AC();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+
+  tone(freq, dur, type, vol, delay, slideTo) {
+    if (!this.enabled || !this.ctx) return;
+    const t = this.ctx.currentTime + (delay || 0);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol || 0.15, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  },
+
+  tick()    { this.tone(520, 0.09, 'sine', 0.16); },                       // geri sayım
+  go()      { this.tone(660, 0.12, 'sine', 0.18); this.tone(990, 0.22, 'sine', 0.18, 0.12); }, // tur başladı
+  cue()     { this.tone(330, 0.06, 'sine', 0.05); },                       // kutu yandı (hafif)
+  hit(pts)  {                                                              // hızlı = daha tiz
+    const f = 620 + (Math.max(0, pts) / CONFIG.MAX_POINTS) * 620;
+    this.tone(f, 0.13, 'triangle', 0.2);
+    this.tone(f * 1.5, 0.11, 'sine', 0.08, 0.03);
+  },
+  miss()    { this.tone(190, 0.28, 'sawtooth', 0.12, 0, 110); },           // yanlış kutu
+  turnEnd() { this.tone(660, 0.16, 'sine', 0.16); this.tone(440, 0.28, 'sine', 0.16, 0.16); },
+  win()     { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.28, 'triangle', 0.18, i * 0.14)); },
+  draw()    { this.tone(520, 0.2, 'sine', 0.15); this.tone(520, 0.3, 'sine', 0.15, 0.22); },
+
+  toggle() {
+    this.enabled = !this.enabled;
+    document.querySelectorAll('.sound-toggle').forEach(b => {
+      b.textContent = this.enabled ? 'Ses: Açık' : 'Ses: Kapalı';
+    });
+    if (this.enabled) { this.init(); this.tick(); }
+  }
+};
+
+/* ---------- 5) OYUN MOTORU ---------- */
+let runId = 0;        // oyun iptal/yeniden başlatma kontrolü
+let currentTurn = null;
+
+/* Reaksiyon süresine göre puan: 0 ms -> MAX_POINTS, ACTIVE_MS -> MIN_POINTS */
+function pointsForReaction(reactionMs) {
+  const ratio = Math.min(Math.max(reactionMs / CONFIG.ACTIVE_MS, 0), 1);
+  return Math.round(CONFIG.MAX_POINTS - ratio * (CONFIG.MAX_POINTS - CONFIG.MIN_POINTS));
+}
+
+async function countdown(seconds, label, sub, id) {
+  showScreen('countdown');
+  $('cd-label').textContent = label;
+  $('cd-sub').textContent = sub || '';
+  for (let s = seconds; s >= 1; s--) {
+    $('cd-number').textContent = s;
+    Sound.tick();
+    await wait(1000);
+    if (id !== runId) return false;
+  }
+  return true;
+}
+
+function playTurn(playerIndex, roundIndex) {
+  return new Promise(resolve => {
+    const timers = [];
+    const turn = {
+      playerIndex, roundIndex,
+      activeCell: -1,
+      lastCell: -1,
+      activatedAt: 0,
+      hitDone: false,
+      points: 0,
+      hits: 0,
+      missed: 0,
+      wrongClicks: 0,
+      reactions: [],
+      phase: 'playing',
+      raf: 0,
+      timers,
+      resolve
+    };
+    currentTurn = turn;
+
+    clearAllCells();
+    $('round-info').textContent = 'Tur ' + (roundIndex + 1) + ' / ' + CONFIG.ROUNDS;
+    $('turn-info').textContent = 'Sıra: ' + Match.players[playerIndex].name;
+    renderScoreboard(playerIndex);
+    showScreen('game');
+    Sound.go();
+
+    const schedule = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const cycle = CONFIG.ACTIVE_MS + CONFIG.GAP_MS;
+    const slots = Math.floor((CONFIG.TURN_MS + CONFIG.GAP_MS) / cycle); // 10s'de 4 kutu
+
+    const deactivate = () => {
+      if (turn.activeCell < 0) return;
+      if (!turn.hitDone) turn.missed++;
+      cells[turn.activeCell].classList.remove('active');
+      turn.activeCell = -1;
+    };
+
+    const activate = () => {
+      let next;
+      do { next = Math.floor(Math.random() * CONFIG.GRID_SIZE); } while (next === turn.lastCell);
+      turn.lastCell = next;
+      turn.activeCell = next;
+      turn.hitDone = false;
+      turn.activatedAt = performance.now();
+      cells[next].classList.add('active');
+      Sound.cue();
+    };
+
+    for (let k = 0; k < slots; k++) {
+      schedule(k * cycle, activate);
+      schedule(k * cycle + CONFIG.ACTIVE_MS, deactivate);
+    }
+    schedule(CONFIG.TURN_MS, () => endTurn(turn));
+
+    // Süre çubuğu
+    const t0 = performance.now();
+    const fill = $('timer-fill');
+    const text = $('timer-text');
+    const tick = () => {
+      if (turn.phase !== 'playing') return;
+      const left = Math.max(0, CONFIG.TURN_MS - (performance.now() - t0));
+      fill.style.transform = 'scaleX(' + (left / CONFIG.TURN_MS) + ')';
+      text.textContent = (left / 1000).toFixed(1);
+      turn.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+function endTurn(turn) {
+  if (turn.phase !== 'playing') return;
+  turn.phase = 'done';
+  cancelAnimationFrame(turn.raf);
+  turn.timers.forEach(clearTimeout);
+  clearAllCells();
+  Sound.turnEnd();
+  $('timer-fill').style.transform = 'scaleX(0)';
+  $('timer-text').textContent = '0.0';
+
+  Match.turns.push({
+    playerIndex: turn.playerIndex,
+    roundIndex: turn.roundIndex,
+    points: turn.points,
+    hits: turn.hits,
+    missed: turn.missed,
+    wrongClicks: turn.wrongClicks,
+    reactions: [...turn.reactions]
+  });
+  turn.resolve();
+}
+
+function abortTurn() {
+  if (currentTurn && currentTurn.phase === 'playing') {
+    currentTurn.phase = 'done';
+    cancelAnimationFrame(currentTurn.raf);
+    currentTurn.timers.forEach(clearTimeout);
+    currentTurn.resolve();
+  }
+  currentTurn = null;
+  clearAllCells();
+}
+
+/* Kutuya dokunma: pointerdown ile en düşük gecikme */
+function onCellPress(event) {
+  const turn = currentTurn;
+  if (!turn || turn.phase !== 'playing') return;
+  const cell = event.target.closest('.cell');
+  if (!cell) return;
+  event.preventDefault();
+
+  const index = Number(cell.dataset.index);
+  const { playerIndex, roundIndex } = turn;
+
+  if (index === turn.activeCell && !turn.hitDone) {
+    const reaction = performance.now() - turn.activatedAt;
+    const pts = pointsForReaction(reaction);
+    turn.hitDone = true;
+    turn.hits++;
+    turn.points += pts;
+    turn.reactions.push(Math.round(reaction));
+    Match.addPoints(playerIndex, roundIndex, pts);
+    cell.classList.remove('active');
+    turn.activeCell = -1;
+    showFeedback(cell, '+' + pts, 'hit');
+    Sound.hit(pts);
+  } else if (index === turn.activeCell && turn.hitDone) {
+    return; // aynı kutuya tekrar basmak ceza değildir
+  } else {
+    turn.wrongClicks++;
+    turn.points -= CONFIG.WRONG_PENALTY;
+    Match.addPoints(playerIndex, roundIndex, -CONFIG.WRONG_PENALTY);
+    showFeedback(cell, '-' + CONFIG.WRONG_PENALTY, 'miss');
+    Sound.miss();
+  }
+  renderScoreboard(playerIndex);
+}
+
+async function startMatch() {
+  Sound.init();
+  const id = ++runId;
+  const names = [
+    cleanName($('name-1').value, CONFIG.DEFAULT_NAMES[0]),
+    cleanName($('name-2').value, CONFIG.DEFAULT_NAMES[1])
+  ];
+  Match.reset(names);
+
+  for (let round = 0; round < CONFIG.ROUNDS; round++) {
+    for (let player = 0; player < 2; player++) {
+      const first = round === 0 && player === 0;
+      const ok = first
+        ? await countdown(CONFIG.START_COUNTDOWN_S, 'Oyun başlıyor', 'İlk sıra: ' + names[player], id)
+        : await countdown(CONFIG.HANDOFF_COUNTDOWN_S, 'Sıra: ' + names[player], 'Tur ' + (round + 1) + ' / ' + CONFIG.ROUNDS, id);
+      if (!ok || id !== runId) return;
+
+      await playTurn(player, round);
+      if (id !== runId) return;
+    }
+  }
+  finishMatch();
+}
+
+function finishMatch() {
+  const winner = Match.winnerIndex();
+  $('result-title').textContent = winner === -1 ? 'Sonuç' : 'Kazanan';
+  $('result-winner').textContent = winner === -1 ? 'Berabere' : Match.players[winner].name;
+
+  $('result-note').textContent = Match.wonByTiebreak()
+    ? 'Puanlar eşit çıktı. Ortalama tepki süresi daha kısa olan oyuncu kazandı.'
+    : 'Puan = 1000 - tepki süresi (ms). Her milisaniye 1 puandır.';
+
+  const head = $('result-head');
+  head.innerHTML = '';
+  const headers = ['Oyuncu'];
+  for (let r = 1; r <= CONFIG.ROUNDS; r++) headers.push('Tur ' + r);
+  headers.push('Ort. ms', 'Toplam');
+  headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); });
+
+  const body = $('result-body');
+  body.innerHTML = '';
+  Match.players.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    if (i === winner) tr.className = 'is-winner';
+
+    const avg = Match.avgReaction(i);
+    const avgText = Number.isFinite(avg) ? Math.round(avg) : '-';
+    const cellsData = [p.name, ...p.scores, avgText, Match.total(i)];
+    cellsData.forEach((value, col) => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      if (col === cellsData.length - 1) td.className = 'total';
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+
+  showScreen('result');
+  if (winner === -1) Sound.draw(); else Sound.win();
+  ScoreRepository.saveMatch(Match.toRecord()).catch(err => console.error('Kayıt hatası:', err));
+}
+
+function backToMenu() {
+  runId++;          // çalışan oyunu iptal et
+  abortTurn();
+  showScreen('setup');
+}
+
+/* ---------- 6) OLAYLAR ---------- */
+$('btn-start').addEventListener('click', startMatch);
+$('btn-again').addEventListener('click', startMatch);
+$('btn-menu').addEventListener('click', backToMenu);
+document.querySelectorAll('.sound-toggle').forEach(b => b.addEventListener('click', () => Sound.toggle()));
+document.addEventListener('pointerdown', () => Sound.init());
+
+gridEl.addEventListener('pointerdown', onCellPress);
+gridEl.addEventListener('contextmenu', e => e.preventDefault());
+
+// Giriş kutusuna dokununca metni seç, kolayca değiştirilebilsin
+['name-1', 'name-2'].forEach(id => {
+  const input = $(id);
+  input.addEventListener('focus', () => setTimeout(() => input.select(), 0));
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+});
+</script>
+</body>
+</html>
